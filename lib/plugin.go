@@ -18,7 +18,6 @@ package lib
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -122,19 +121,46 @@ func (p *Plugin) Install() error {
 		return err
 	}
 	if len(versions) > 0 {
-		slices.SortFunc(versions, semver.Compare)
-		version := versions[len(versions)-1]
+		version := maxVersion(versions)
 		if err := p.CheckoutVersion(version); err != nil {
 			return err
 		}
 		p.Version = version
 		return nil
 	}
-	fmt.Println("here")
 
 	p.Branch, err = p.DefaultBranch()
 
 	return err
+}
+
+// Finds the maximum version in the given slice of versions.
+// Returns an empty string if no valid versions are present in the slice.
+func maxVersion(versions []string) string {
+	if len(versions) == 0 {
+		return ""
+	}
+
+	return slices.MaxFunc(versions, func(a, b string) int {
+		return semver.Compare(a, b)
+	})
+}
+
+// Sorts and filters a list of versions returned from the output of `git tag`.
+// Any version strings that are not valid according to semver 2.0 will be removed.
+func sortVersions(versions []string) []string {
+	mutableVersions := make([]string, len(versions))
+	copy(mutableVersions, versions)
+
+	for i, version := range mutableVersions {
+		mutableVersions[i] = strings.TrimSpace(version)
+	}
+	mutableVersions = slices.DeleteFunc(mutableVersions, func(version string) bool {
+		return version == "" || !semver.IsValid(version)
+	})
+	semver.Sort(mutableVersions)
+
+	return mutableVersions
 }
 
 func (p *Plugin) DefaultBranch() (string, error) {
@@ -193,14 +219,7 @@ func (p *Plugin) AvailableVersions() ([]string, error) {
 	if err := cmd.Run(); err != nil {
 		return []string{}, err
 	}
-
-	versions := strings.Split(out.String(), "\n")
-	for i, version := range versions {
-		versions[i] = strings.TrimSpace(version)
-	}
-	return slices.DeleteFunc(versions, func(version string) bool {
-		return version == ""
-	}), nil
+	return sortVersions(strings.Split(out.String(), "\n")), nil
 }
 
 type Lockfile struct {
