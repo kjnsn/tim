@@ -85,5 +85,10 @@ func addCommand(pluginName string) {
 		log.Fatal(err)
 	}
 
+	lockFile.Plugins = append(lockFile.Plugins, plugin)
+	if err := lockFile.Save(); err != nil {
+		log.Fatal(err)
+	}
+
 	fmt.Printf("Plugin %s successfully installed\n", pluginName)
 }

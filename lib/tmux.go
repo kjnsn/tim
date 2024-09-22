@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-var ErrNoTmuxConfig = errors.New("No tmux.conf file found")
+var ErrNoTmuxConfig = errors.New("no tmux.conf file found")
 
 // Ensures that tmux is installed, and returns the version as a string.
 func GetTmuxVersion() (string, error) {
@@ -39,10 +39,10 @@ func GetTmuxVersion() (string, error) {
 	// both parts are correct.
 	splits := strings.Split(out.String(), " ")
 	if len(splits) != 2 {
-		return "", fmt.Errorf("Bad output of command 'tmux -V': %s", out.String())
+		return "", fmt.Errorf("bad output of command 'tmux -V': %s", out.String())
 	}
 	if splits[0] != "tmux" {
-		return "", fmt.Errorf("Bad output of first part of command 'tmux -V': %s", out.String())
+		return "", fmt.Errorf("bad output of first part of command 'tmux -V': %s", out.String())
 	}
 
 	return splits[1], nil

@@ -18,11 +18,15 @@ package lib
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 var ErrPluginNotInstalled = errors.New("Plugin not installed")
@@ -58,14 +62,22 @@ type Plugin struct {
 	Branch string `json:"branch"`
 }
 
+// Returns the absolute path to this plugin's directory.
+func (p *Plugin) Dir() (string, error) {
+	pluginsDir, err := GetPluginsDir()
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join(pluginsDir, p.Name), nil
+}
+
 // Checks that the given plugin is installed. Returns a nil error if successful.
 func (p *Plugin) CheckInstalled() error {
-	pluginsDir, err := GetPluginsDir()
+	pluginDir, err := p.Dir()
 	if err != nil {
 		return err
 	}
-
-	pluginDir := path.Join(pluginsDir, p.Name)
 	fsInfo, err := os.Stat(pluginDir)
 	if os.IsNotExist(err) || !fsInfo.IsDir() {
 		return ErrPluginNotInstalled
@@ -79,17 +91,83 @@ func (p *Plugin) CheckInstalled() error {
 
 // Installs the given plugin with git.
 func (p *Plugin) Install() error {
-	pluginsDir, err := GetPluginsDir()
+	pluginDir, err := p.Dir()
 	if err != nil {
 		return err
 	}
-
-	pluginDir := path.Join(pluginsDir, p.Name)
 	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		return err
 	}
 
 	cmd := exec.Command("git", "clone", "https://github.com/"+p.Name+".git", pluginDir)
+	cmd.Dir = pluginDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	if p.Branch != "" {
+		return p.CheckoutVersion(p.Branch)
+	}
+	if p.Version != "" {
+		return p.CheckoutVersion(p.Version)
+	}
+
+	// Find the latest tag, or use the default branch.
+	// Only if neither are already set.
+	versions, err := p.AvailableVersions()
+	if err != nil {
+		return err
+	}
+	if len(versions) > 0 {
+		slices.SortFunc(versions, semver.Compare)
+		version := versions[len(versions)-1]
+		if err := p.CheckoutVersion(version); err != nil {
+			return err
+		}
+		p.Version = version
+		return nil
+	}
+	fmt.Println("here")
+
+	p.Branch, err = p.DefaultBranch()
+
+	return err
+}
+
+func (p *Plugin) DefaultBranch() (string, error) {
+	if err := p.CheckInstalled(); err != nil {
+		return "", err
+	}
+
+	pluginDir, err := p.Dir()
+	if err != nil {
+		return "", err
+	}
+
+	var out strings.Builder
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "origin/HEAD")
+	cmd.Dir = pluginDir
+	cmd.Stdout = &out
+
+	if err := cmd.Run(); err != nil {
+
+		return "", err
+	}
+
+	return strings.TrimSpace(out.String()), nil
+}
+
+// Checks out the given git ref, could be a branch or tag.
+func (p *Plugin) CheckoutVersion(version string) error {
+	pluginDir, err := p.Dir()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("git", "checkout", "-q", version)
 	cmd.Dir = pluginDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -102,21 +180,27 @@ func (p *Plugin) AvailableVersions() ([]string, error) {
 		return []string{}, err
 	}
 
-	pluginsDir, err := GetPluginsDir()
+	pluginDir, err := p.Dir()
 	if err != nil {
 		return []string{}, err
 	}
 
 	var out strings.Builder
 	cmd := exec.Command("git", "tag", "--list", "v*")
-	cmd.Dir = pluginsDir
+	cmd.Dir = pluginDir
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
 		return []string{}, err
 	}
 
-	return strings.Split(out.String(), "\n"), nil
+	versions := strings.Split(out.String(), "\n")
+	for i, version := range versions {
+		versions[i] = strings.TrimSpace(version)
+	}
+	return slices.DeleteFunc(versions, func(version string) bool {
+		return version == ""
+	}), nil
 }
 
 type Lockfile struct {
@@ -128,6 +212,23 @@ type Lockfile struct {
 // Closes all resources associated with this lock file.
 func (lf *Lockfile) Close() {
 	lf.file.Close()
+}
+
+// Writes the lock file to disk.
+func (lf *Lockfile) Save() error {
+	if err := lf.file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := lf.file.Seek(0, 0); err != nil {
+		return err
+	}
+
+	defer lf.file.Sync()
+
+	encoder := json.NewEncoder(lf.file)
+	encoder.SetIndent("", "  ")
+
+	return encoder.Encode(lf)
 }
 
 // Loads the lockfile, creating one if required.
@@ -142,9 +243,9 @@ func GetLockfile() (*Lockfile, error) {
 	if err != nil {
 		return nil, err
 	}
-	lockPath := path.Join(configDir, "/timlock.json")
+	lockPath := path.Join(configDir, "/tim/timlock.json")
 
-	actualLockFile, err := os.OpenFile(lockPath, os.O_CREATE, 0600)
+	actualLockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
