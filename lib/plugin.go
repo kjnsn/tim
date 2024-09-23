@@ -222,10 +222,31 @@ func (p *Plugin) AvailableVersions() ([]string, error) {
 	return sortVersions(strings.Split(out.String(), "\n")), nil
 }
 
+// Removes all files related to this plugin from the filesystem.
+func (p *Plugin) Uninstall() error {
+	pluginDir, err := p.Dir()
+	if err != nil {
+		return err
+	}
+
+	return os.RemoveAll(pluginDir)
+}
+
 type Lockfile struct {
 	file *os.File
 
 	Plugins []Plugin `json:"plugins"`
+}
+
+// Attempts to find a plugin with the given name. Returns nil if the given plugin cannot be found.
+func (lf *Lockfile) GetPlugin(name string) *Plugin {
+	for _, plugin := range lf.Plugins {
+		if plugin.Name == name {
+			return &plugin
+		}
+	}
+
+	return nil
 }
 
 // Closes all resources associated with this lock file.

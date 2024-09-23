@@ -16,11 +16,11 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
-	"log"
 	"os"
+	"strings"
 
 	"github.com/kjnsn/tim/lib"
+	"github.com/kjnsn/tim/lib/message"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +38,7 @@ The repository will be scanned for releases and tags,
 and the latest installed by default.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		addCommand(args[0])
+		addCommand(strings.ToLower(strings.TrimSpace(args[0])))
 	},
 }
 
@@ -58,7 +58,7 @@ func init() {
 func addCommand(pluginName string) {
 	lockFile, err := lib.GetLockfile()
 	if err != nil {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 	defer lockFile.Close()
 
@@ -74,21 +74,21 @@ func addCommand(pluginName string) {
 
 	err = plugin.CheckInstalled()
 	if err == nil {
-		fmt.Printf("Plugin %s is already installed\n", pluginName)
+		message.Error("Plugin %s is already installed\n", pluginName)
 		os.Exit(1)
 	}
 	if err != nil && err != lib.ErrPluginNotInstalled {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 
 	if err := plugin.Install(); err != nil {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 
 	lockFile.Plugins = append(lockFile.Plugins, plugin)
 	if err := lockFile.Save(); err != nil {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 
-	fmt.Printf("Plugin %s successfully installed\n", pluginName)
+	message.Info("Plugin %s successfully installed\n", pluginName)
 }

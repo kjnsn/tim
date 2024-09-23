@@ -17,10 +17,11 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"slices"
+	"strings"
 
 	"github.com/kjnsn/tim/lib"
+	"github.com/kjnsn/tim/lib/message"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +35,7 @@ or without an argument shows information about all plugins.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		pluginName := ""
 		if len(args) > 0 {
-			pluginName = args[0]
+			pluginName = strings.ToLower(strings.TrimSpace(args[0]))
 		}
 		infoCommand(pluginName)
 	},
@@ -47,7 +48,7 @@ func init() {
 func infoCommand(pluginName string) {
 	lockFile, err := lib.GetLockfile()
 	if err != nil {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 	defer lockFile.Close()
 
@@ -56,9 +57,11 @@ func infoCommand(pluginName string) {
 			return plugin.Name == pluginName
 		})
 		if i == -1 {
-			log.Fatalf("Plugin %s not installed\n", pluginName)
+			message.Warning("Plugin %s not installed\n", pluginName)
+		} else {
+			printPluginInfo(lockFile.Plugins[i])
 		}
-		printPluginInfo(lockFile.Plugins[i])
+
 		return
 	}
 
@@ -69,7 +72,7 @@ func infoCommand(pluginName string) {
 
 func printPluginInfo(plugin lib.Plugin) {
 	if err := plugin.CheckInstalled(); err != nil {
-		log.Fatal(err)
+		message.Error(err.Error())
 	}
 
 	str := ""
