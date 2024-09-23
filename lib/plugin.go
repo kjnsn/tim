@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -59,6 +60,34 @@ type Plugin struct {
 	// Git branch of the plugin as currently installed.
 	// Only one of version and branch can be specified at the same time.
 	Branch string `json:"branch"`
+}
+
+// Loads the plugin by running all of it's scripts.
+func (p *Plugin) Load() error {
+	pluginDir, err := p.Dir()
+	if err != nil {
+		return err
+	}
+
+	dir := os.DirFS(pluginDir)
+	entries, err := fs.ReadDir(dir, ".")
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tmux") && entry.Type().IsRegular() {
+			cmd := exec.Command(path.Join(pluginDir, entry.Name()))
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // Returns the absolute path to this plugin's directory.
