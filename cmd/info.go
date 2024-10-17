@@ -53,19 +53,19 @@ func infoCommand(pluginName string) {
 	defer lockFile.Close()
 
 	if pluginName != "" {
-		i := slices.IndexFunc(lockFile.Plugins, func(plugin lib.Plugin) bool {
+		i := slices.IndexFunc(lockFile.Plugins(), func(plugin lib.Plugin) bool {
 			return plugin.Name == pluginName
 		})
 		if i == -1 {
 			message.Warning("Plugin %s not installed\n", pluginName)
 		} else {
-			printPluginInfo(lockFile.Plugins[i])
+			printPluginInfo(lockFile.Plugins()[i])
 		}
 
 		return
 	}
 
-	for _, plugin := range lockFile.Plugins {
+	for _, plugin := range lockFile.Plugins() {
 		printPluginInfo(plugin)
 	}
 }
@@ -78,10 +78,7 @@ func printPluginInfo(plugin lib.Plugin) {
 	str := ""
 
 	str += fmt.Sprintf("Name: %s\n", plugin.Name)
-	if plugin.Branch != "" {
-		str += fmt.Sprintf("Using branch: %s\n", plugin.Branch)
-	}
-	if plugin.Version != "" {
+	if plugin.Version != nil {
 		str += fmt.Sprintf("Version: %s\n", plugin.Version)
 	}
 

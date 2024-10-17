@@ -42,7 +42,7 @@ func loadCommand() {
 	}
 	defer lockFile.Close()
 
-	for _, plugin := range lockFile.Plugins {
+	for _, plugin := range lockFile.Plugins() {
 		if err := plugin.Load(); err != nil {
 			message.Error(err.Error())
 		}

@@ -23,10 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"slices"
 	"strings"
-
-	"golang.org/x/mod/semver"
 )
 
 var ErrPluginNotInstalled = errors.New("Plugin not installed")
@@ -51,15 +48,10 @@ func GetPluginsDir() (string, error) {
 
 type Plugin struct {
 	// Name of the plugin in the form <username>/<repo>
-	Name string `json:"name"`
+	Name string
 
 	// Semantic version of the plugin as currently installed.
-	// Only one of version and branch can be specified at the same time.
-	Version string `json:"version"`
-
-	// Git branch of the plugin as currently installed.
-	// Only one of version and branch can be specified at the same time.
-	Branch string `json:"branch"`
+	Version Version
 }
 
 // Loads the plugin by running all of it's scripts.
@@ -117,8 +109,9 @@ func (p *Plugin) CheckInstalled() error {
 	return nil
 }
 
-// Installs the given plugin with git.
-func (p *Plugin) Install() error {
+// Installs the given plugin with git, overwriting any existing configuration.
+// Uses the given version spec to install at the provided version.
+func (p *Plugin) Install(versionSpec string) error {
 	pluginDir, err := p.Dir()
 	if err != nil {
 		return err
@@ -127,128 +120,32 @@ func (p *Plugin) Install() error {
 		return err
 	}
 
-	cmd := exec.Command("git", "clone", "https://github.com/"+p.Name+".git", pluginDir)
-	cmd.Dir = pluginDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
+	if _, err := RunGitCommand(pluginDir, "clone", "https://github.com/"+p.Name+".git", pluginDir); err != nil {
 		return err
 	}
 
-	if p.Branch != "" {
-		return p.CheckoutVersion(p.Branch)
+	bestVersion, err := FindBestVersion(pluginDir)
+	if err != nil {
+		return err
 	}
-	if p.Version != "" {
+	p.Version = bestVersion
+
+	if p.Version != nil {
 		return p.CheckoutVersion(p.Version)
 	}
 
-	// Find the latest tag, or use the default branch.
-	// Only if neither are already set.
-	versions, err := p.AvailableVersions()
-	if err != nil {
-		return err
-	}
-	if len(versions) > 0 {
-		version := maxVersion(versions)
-		if err := p.CheckoutVersion(version); err != nil {
-			return err
-		}
-		p.Version = version
-		return nil
-	}
-
-	p.Branch, err = p.DefaultBranch()
-
-	return err
-}
-
-// Finds the maximum version in the given slice of versions.
-// Returns an empty string if no valid versions are present in the slice.
-func maxVersion(versions []string) string {
-	if len(versions) == 0 {
-		return ""
-	}
-
-	return slices.MaxFunc(versions, func(a, b string) int {
-		return semver.Compare(a, b)
-	})
-}
-
-// Sorts and filters a list of versions returned from the output of `git tag`.
-// Any version strings that are not valid according to semver 2.0 will be removed.
-func sortVersions(versions []string) []string {
-	mutableVersions := make([]string, len(versions))
-	copy(mutableVersions, versions)
-
-	for i, version := range mutableVersions {
-		mutableVersions[i] = strings.TrimSpace(version)
-	}
-	mutableVersions = slices.DeleteFunc(mutableVersions, func(version string) bool {
-		return version == "" || !semver.IsValid(version)
-	})
-	semver.Sort(mutableVersions)
-
-	return mutableVersions
-}
-
-func (p *Plugin) DefaultBranch() (string, error) {
-	if err := p.CheckInstalled(); err != nil {
-		return "", err
-	}
-
-	pluginDir, err := p.Dir()
-	if err != nil {
-		return "", err
-	}
-
-	var out strings.Builder
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "origin/HEAD")
-	cmd.Dir = pluginDir
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-
-		return "", err
-	}
-
-	return strings.TrimSpace(out.String()), nil
+	return nil
 }
 
 // Checks out the given git ref, could be a branch or tag.
-func (p *Plugin) CheckoutVersion(version string) error {
+func (p *Plugin) CheckoutVersion(version Version) error {
 	pluginDir, err := p.Dir()
 	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command("git", "checkout", "-q", version)
-	cmd.Dir = pluginDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-}
-
-func (p *Plugin) AvailableVersions() ([]string, error) {
-	if err := p.CheckInstalled(); err != nil {
-		return []string{}, err
-	}
-
-	pluginDir, err := p.Dir()
-	if err != nil {
-		return []string{}, err
-	}
-
-	var out strings.Builder
-	cmd := exec.Command("git", "tag", "--list", "v*")
-	cmd.Dir = pluginDir
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return []string{}, err
-	}
-	return sortVersions(strings.Split(out.String(), "\n")), nil
+	_, err = RunGitCommand(pluginDir, "checkout", "-q", version.GitRef())
+	return err
 }
 
 // Removes all files related to this plugin from the filesystem.
@@ -264,12 +161,23 @@ func (p *Plugin) Uninstall() error {
 type Lockfile struct {
 	file *os.File
 
-	Plugins []Plugin `json:"plugins"`
+	PluginSpecs map[string]string `json:"plugins"`
+}
+
+func (lf *Lockfile) Plugins() []Plugin {
+	plugins := make([]Plugin, 0)
+	for name, versionSpec := range lf.PluginSpecs {
+		plugins = append(plugins, Plugin{
+			Name:    name,
+			Version: VersionFromSpec(versionSpec),
+		})
+	}
+	return plugins
 }
 
 // Attempts to find a plugin with the given name. Returns nil if the given plugin cannot be found.
 func (lf *Lockfile) GetPlugin(name string) *Plugin {
-	for _, plugin := range lf.Plugins {
+	for _, plugin := range lf.Plugins() {
 		if plugin.Name == name {
 			return &plugin
 		}

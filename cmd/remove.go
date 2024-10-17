@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/kjnsn/tim/lib"
@@ -54,9 +53,8 @@ func removeCommand(pluginName string) {
 		message.Error(err.Error())
 	}
 
-	lockFile.Plugins = slices.DeleteFunc(lockFile.Plugins, func(plugin lib.Plugin) bool {
-		return plugin.Name == pluginName
-	})
+	delete(lockFile.PluginSpecs, pluginName)
+
 	if err := lockFile.Save(); err != nil {
 		message.Error(err.Error())
 	}

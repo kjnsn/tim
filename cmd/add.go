@@ -43,16 +43,13 @@ and the latest installed by default.`,
 }
 
 var (
-	// The desired branch of the plugin.
-	branchFlag  string
-	versionFlag string
+	versionSpecFlag string
 )
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringVar(&branchFlag, "branch", "", "Branch to checkout.")
-	addCmd.Flags().StringVar(&versionFlag, "version", "", "Version to use. Only semver 2.0 compliant strings are supported.")
-	addCmd.MarkFlagsMutuallyExclusive("branch", "version")
+	addCmd.Flags().StringVar(&versionSpecFlag, "version", "",
+		"Version to use. Only semver 2.0 compliant strings and branch names are supported.")
 }
 
 func addCommand(pluginName string) {
@@ -65,12 +62,6 @@ func addCommand(pluginName string) {
 	plugin := lib.Plugin{
 		Name: pluginName,
 	}
-	if branchFlag != "" {
-		plugin.Branch = branchFlag
-	}
-	if versionFlag != "" {
-		plugin.Version = versionFlag
-	}
 
 	err = plugin.CheckInstalled()
 	if err == nil {
@@ -81,11 +72,11 @@ func addCommand(pluginName string) {
 		message.Error(err.Error())
 	}
 
-	if err := plugin.Install(); err != nil {
+	if err := plugin.Install(versionSpecFlag); err != nil {
 		message.Error(err.Error())
 	}
 
-	lockFile.Plugins = append(lockFile.Plugins, plugin)
+	lockFile.PluginSpecs[plugin.Name] = plugin.Version.GitRef()
 	if err := lockFile.Save(); err != nil {
 		message.Error(err.Error())
 	}
