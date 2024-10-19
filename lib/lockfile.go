@@ -73,18 +73,11 @@ func (lf *Lockfile) Save() error {
 }
 
 // Loads the lockfile, creating one if required.
-func GetLockfile() (*Lockfile, error) {
-	// Ensure the correct directories are created.
-	_, err := GetPluginsDir()
+func GetLockfile(cfgOverride string) (*Lockfile, error) {
+	lockPath, err := lockfilePath(cfgOverride)
 	if err != nil {
 		return nil, err
 	}
-
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	lockPath := path.Join(configDir, "/tim/timlock.json")
 
 	actualLockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
@@ -107,4 +100,22 @@ func GetLockfile() (*Lockfile, error) {
 	}
 
 	return lockFile, nil
+}
+
+// Returns the path to the lockfile.
+// Preferences, in order:
+// - pathOverride
+// - ~/.config/tim/tim.json
+func lockfilePath(pathOverride string) (string, error) {
+	// Ensure the correct directories are created.
+	timDir, err := GetTimDir()
+	if err != nil {
+		return "", err
+	}
+
+	if pathOverride != "" {
+		return pathOverride, nil
+	}
+
+	return path.Join(timDir, "tim.json"), nil
 }

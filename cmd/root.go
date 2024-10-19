@@ -31,6 +31,8 @@ Tim manages plugins for tmux and optionaly ensures that the tmux
 configuration is setup with opinionated defaults.`,
 }
 
+var cfgFile string
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
@@ -45,7 +47,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.tim.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.config/tim/tim.json)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

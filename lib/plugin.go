@@ -26,22 +26,44 @@ import (
 
 var ErrPluginNotInstalled = errors.New("Plugin not installed")
 
-// Gets the plugins directory, creating it if it does not already exist.
-// The plugin directory is inside xdg-config-home, usually "~/.config".
+// Gets the tim directory, creating it if it does not already exist.
+// The tim directory is inside xdg-config-home, usually "~/.config".
 // Directories ~/.config/tim and ~/.config/tim/plugins are created.
-func GetPluginsDir() (string, error) {
+func GetTimDir() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 
-	pluginDir := path.Join(configDir, "/tim/plugins")
+	// Explicitly override the path containing `Application Support` on macos.
+	// ~/.config/... is (subjectively) more conventional.
+	if strings.Contains(configDir, "Application Support") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		configDir = path.Join(homeDir, ".config/")
+	}
+
+	timDir := path.Join(configDir, "/tim")
+
+	pluginDir := path.Join(timDir, "/plugins")
 	err = os.MkdirAll(pluginDir, 0750)
 	if err != nil {
 		return "", err
 	}
 
-	return pluginDir, nil
+	return timDir, nil
+}
+
+// Returns the plugins install directory. This is `GetTimDir() + "/plugins"`
+func GetPluginsDir() (string, error) {
+	timDir, err := GetTimDir()
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join(timDir, "/plugins"), nil
 }
 
 type Plugin struct {

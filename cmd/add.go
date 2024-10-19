@@ -53,7 +53,7 @@ func init() {
 }
 
 func addCommand(pluginName string) {
-	lockFile, err := lib.GetLockfile()
+	lockFile, err := lib.GetLockfile(cfgFile)
 	if err != nil {
 		message.Error(err.Error())
 	}
