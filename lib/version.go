@@ -16,8 +16,8 @@ limitations under the License.
 package lib
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -34,8 +34,12 @@ var ErrNoVersions = errors.New("no versions available")
 // an upgrade to a new version available.
 //
 // Check checks if there is an upgrade available.
+//
+// Upgrade checks out and switches to this version.
 type Version interface {
 	HasUpgrade() (bool, Version)
+
+	Upgrade(pluginDir string) error
 
 	Check(pluginDir string) error
 
@@ -57,7 +61,9 @@ func VersionFromSpec(spec string) Version {
 		}
 	}
 
-	return &GitVersion{}
+	return &GitVersion{
+		branch: spec,
+	}
 }
 
 // Finds the best version of the plugin at the given pluginDir,
@@ -132,6 +138,11 @@ func (sv *SemanticVersion) Check(pluginDir string) error {
 	return nil
 }
 
+func (sv *SemanticVersion) Upgrade(pluginDir string) error {
+	_, err := RunGitCommand(pluginDir, "checkout", "-f", sv.GitRef())
+	return err
+}
+
 // Finds the maximum semver in the given slice of versions.
 // Returns an empty string if no valid versions are present in the slice.
 func maxVersion(versions []string) string {
@@ -152,13 +163,6 @@ func (sv *SemanticVersion) GitRef() string {
 	return sv.currentVersion
 }
 
-// Implementation of the [encoding/json.Marshaler] interface.
-// This encodes to a string such as `v0.1.0` following
-// the [golang.org/x/mod/semver] spec.
-func (sv *SemanticVersion) MarshalJSON() ([]byte, error) {
-	return json.Marshal(sv.currentVersion)
-}
-
 type GitVersion struct {
 	currentHash string
 	branch      string
@@ -168,6 +172,12 @@ type GitVersion struct {
 }
 
 func (gv *GitVersion) HasUpgrade() (bool, Version) {
+	if gv.currentHash != "" && gv.latestHash != "" && gv.currentHash != gv.latestHash {
+		return true, &GitVersion{
+			currentHash: gv.latestHash,
+			branch:      gv.branch,
+		}
+	}
 	return false, nil
 }
 
@@ -176,11 +186,22 @@ func (gv *GitVersion) Check(pluginDir string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+
+	gv.latestHash, err = GetRef(pluginDir, "--verify", "@{u}")
+	return err
+}
+
+func (sv *GitVersion) Upgrade(pluginDir string) error {
+	if _, err := RunGitCommand(pluginDir, "checkout", "-f", sv.GitRef()); err != nil {
+		return err
+	}
+
+	_, err := RunGitCommand(pluginDir, "branch", "-f", sv.branch, "origin/"+sv.branch)
+	return err
 }
 
 func (gv *GitVersion) String() string {
-	return ""
+	return fmt.Sprintf("%s@%10s", gv.branch, gv.currentHash)
 }
 
 func (gv *GitVersion) GitRef() string {

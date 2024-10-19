@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"os"
 	"strings"
 
 	"github.com/kjnsn/tim/lib"
@@ -35,44 +34,68 @@ Plugins are github URLs of the format <username>/<repo>.
 So "add user123/my-cool-plugin" installs github.com/user123/my-cool-plugin.
 
 The repository will be scanned for releases and tags,
-and the latest installed by default.`,
-	Args: cobra.ExactArgs(1),
+and the latest installed by default.
+
+If no plugin names are given, then plugins are installed according to the
+configuration file ~/.config/tim/tim.json`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		addCommand(strings.ToLower(strings.TrimSpace(args[0])))
+		if len(args) > 0 {
+			addPlugin(strings.ToLower(strings.TrimSpace(args[0])))
+		} else {
+			syncPlugins()
+		}
 	},
 }
 
 var (
-	versionSpecFlag string
+	versionSpec string
 )
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringVar(&versionSpecFlag, "version", "",
+	addCmd.Flags().StringVar(&versionSpec, "version", "",
 		"Version to use. Only semver 2.0 compliant strings and branch names are supported.")
 }
 
-func addCommand(pluginName string) {
+func syncPlugins() {
 	lockFile, err := lib.GetLockfile(cfgFile)
 	if err != nil {
 		message.Error(err.Error())
 	}
 	defer lockFile.Close()
 
+	for pluginName, spec := range lockFile.PluginSpecs {
+		plugin := lib.Plugin{
+			Name: pluginName,
+		}
+
+		if err := plugin.Install(spec); err != nil {
+			message.Error(err.Error())
+		}
+		message.Info("Plugin %s successfully installed at version %s\n", pluginName, plugin.Version)
+	}
+}
+
+func addPlugin(pluginName string) {
+	lockFile, err := lib.GetLockfile(cfgFile)
+	if err != nil {
+		message.Error(err.Error())
+	}
+	defer lockFile.Close()
+
+	// If a version has not been explicitly specified,
+	// try and find the plugin in the lockfile,
+	// and if it exists use that version spec.
+	if versionSpec == "" {
+		versionSpec = lockFile.PluginSpecs[pluginName]
+	}
+
 	plugin := lib.Plugin{
 		Name: pluginName,
 	}
 
-	err = plugin.CheckInstalled()
-	if err == nil {
-		message.Error("Plugin %s is already installed\n", pluginName)
-		os.Exit(1)
-	}
-	if err != nil && err != lib.ErrPluginNotInstalled {
-		message.Error(err.Error())
-	}
-
-	if err := plugin.Install(versionSpecFlag); err != nil {
+	if err := plugin.Install(versionSpec); err != nil {
 		message.Error(err.Error())
 	}
 
@@ -81,5 +104,5 @@ func addCommand(pluginName string) {
 		message.Error(err.Error())
 	}
 
-	message.Info("Plugin %s successfully installed\n", pluginName)
+	message.Info("Plugin %s successfully installed at version %s\n", pluginName, plugin.Version)
 }

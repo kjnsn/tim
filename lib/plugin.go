@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+
+	"github.com/kjnsn/tim/lib/message"
 )
 
 var ErrPluginNotInstalled = errors.New("Plugin not installed")
@@ -136,19 +138,40 @@ func (p *Plugin) Install(versionSpec string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(pluginDir, 0750); err != nil {
-		return err
+
+	pluginExistsOnFilesystem := true
+	if err := p.CheckInstalled(); err != nil {
+		if err == ErrPluginNotInstalled {
+			pluginExistsOnFilesystem = false
+		} else {
+			return err
+		}
 	}
 
-	if _, err := RunGitCommand(pluginDir, "clone", "https://github.com/"+p.Name+".git", pluginDir); err != nil {
-		return err
+	if !pluginExistsOnFilesystem {
+		message.Debug("Cloning %s to %s", p.Name, pluginDir)
+		if err := os.MkdirAll(pluginDir, 0750); err != nil {
+			return err
+		}
+		if _, err := RunGitCommand(pluginDir, "clone", "https://github.com/"+p.Name+".git", pluginDir); err != nil {
+			return err
+		}
+	} else {
+		message.Debug("Plugin %s already exists at %s, not cloning", p.Name, pluginDir)
 	}
 
-	bestVersion, err := FindBestVersion(pluginDir)
-	if err != nil {
-		return err
+	if p.Version == nil {
+		if versionSpec != "" {
+			p.Version = VersionFromSpec(versionSpec)
+		} else {
+			bestVersion, err := FindBestVersion(pluginDir)
+			if err != nil {
+				return err
+			}
+
+			p.Version = bestVersion
+		}
 	}
-	p.Version = bestVersion
 
 	if p.Version != nil {
 		return p.CheckoutVersion(p.Version)
@@ -157,7 +180,7 @@ func (p *Plugin) Install(versionSpec string) error {
 	return nil
 }
 
-// Checks out the given git ref, could be a branch or tag.
+// Checks out the given version.
 func (p *Plugin) CheckoutVersion(version Version) error {
 	pluginDir, err := p.Dir()
 	if err != nil {
@@ -175,5 +198,8 @@ func (p *Plugin) Uninstall() error {
 		return err
 	}
 
-	return os.RemoveAll(pluginDir)
+	if err := os.RemoveAll(pluginDir); err != nil {
+		return err
+	}
+	return os.Remove(pluginDir)
 }

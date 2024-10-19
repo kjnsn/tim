@@ -89,7 +89,8 @@ func GetLockfile(cfgOverride string) (*Lockfile, error) {
 	}
 
 	lockFile := &Lockfile{
-		file: actualLockFile,
+		file:        actualLockFile,
+		PluginSpecs: make(map[string]string),
 	}
 
 	// Only try and parse the contents if the file is non-empty.

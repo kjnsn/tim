@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/kjnsn/tim/lib"
 	"github.com/kjnsn/tim/lib/message"
@@ -67,9 +68,33 @@ func upgradeCommand(pluginName string) {
 			message.Error("Plugin %s not found", pluginName)
 		}
 		upgradePlugin(plugin)
+		if !uCheckFlag {
+			lockFile.PluginSpecs[plugin.Name] = plugin.Version.GitRef()
+		}
 	} else {
+		var wg sync.WaitGroup
+		lockSync := new(sync.Mutex)
+
 		for _, plugin := range lockFile.Plugins() {
-			upgradePlugin(&plugin)
+			wg.Add(1)
+			go func(plugin lib.Plugin) {
+				defer wg.Done()
+
+				upgradePlugin(&plugin)
+				if !uCheckFlag {
+					lockSync.Lock()
+					lockFile.PluginSpecs[plugin.Name] = plugin.Version.GitRef()
+					lockSync.Unlock()
+				}
+			}(plugin)
+		}
+
+		wg.Wait()
+	}
+
+	if !uCheckFlag {
+		if err := lockFile.Save(); err != nil {
+			message.Error(err.Error())
 		}
 	}
 }
@@ -85,13 +110,26 @@ func upgradePlugin(plugin *lib.Plugin) error {
 		return nil
 	}
 
-	message.Info("Plugin %s has upgrade available: %s -> %s", plugin.Version, newVersion)
+	oldVersion := plugin.Version.String()
+	message.Info("Plugin %s has upgrade available: %s -> %s", plugin.Name, oldVersion, newVersion)
 
 	if uCheckFlag {
 		return nil
 	}
 
-	return plugin.CheckoutVersion(newVersion)
+	pluginDir, err := plugin.Dir()
+	if err != nil {
+		return err
+	}
+	err = newVersion.Upgrade(pluginDir)
+	if err != nil {
+		return err
+	}
+
+	plugin.Version = newVersion
+	message.Info("Plugin %s upgraded from %s to %s", plugin.Name, oldVersion, newVersion)
+
+	return nil
 }
 
 // Returns the version to upgrade to. Will be non-empty
@@ -101,6 +139,9 @@ func newVersion(plugin *lib.Plugin) (lib.Version, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	message.Debug("Checking plugin %s for a new version", plugin.Name)
+
 	if err := plugin.Version.Check(pluginDir); err != nil {
 		return nil, err
 	}

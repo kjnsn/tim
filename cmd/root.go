@@ -18,6 +18,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/kjnsn/tim/lib/message"
 	"github.com/spf13/cobra"
 )
 
@@ -29,9 +30,13 @@ var rootCmd = &cobra.Command{
 
 Tim manages plugins for tmux and optionaly ensures that the tmux
 configuration is setup with opinionated defaults.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		message.DebugEnabled = enableVerbose
+	},
 }
 
 var cfgFile string
+var enableVerbose bool
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -43,12 +48,6 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.config/tim/tim.json)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
+	rootCmd.PersistentFlags().BoolVarP(&enableVerbose, "verbose", "v", false, "print verbose information")
 }

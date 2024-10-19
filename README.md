@@ -41,3 +41,9 @@ And removing is just as easy:
 ```bash
 tim remove catppuccin/tmux-catppuccin
 ```
+
+You can see and edit the list of plugins in the config file at
+`~/.config/tim/tim.json`.
+
+If you change any versions in the json configuration, just run
+`tim add` again to sync.

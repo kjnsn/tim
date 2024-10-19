@@ -16,6 +16,7 @@ limitations under the License.
 package lib
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -30,12 +31,24 @@ func GetRef(basedir, flag, pathspec string) (string, error) {
 	return RunGitCommand(basedir, "rev-parse", flag, pathspec)
 }
 
+// Checks out and updates `branch` from the remote.
+func UpdateBranch(baseDir, branch string) error {
+	_, err := RunGitCommand(baseDir, "checkout", "-f", branch)
+	if err != nil {
+		return err
+	}
+
+	_, err = RunGitCommand(baseDir, "pull", "--ff-only", "-q")
+	return err
+}
+
 // Runs the given git command.
 func RunGitCommand(basedir string, args ...string) (string, error) {
 	var out strings.Builder
 	cmd := exec.Command("git", args...)
 	cmd.Dir = basedir
 	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
 		return "", err
