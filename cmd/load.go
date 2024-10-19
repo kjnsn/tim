@@ -16,18 +16,24 @@ limitations under the License.
 package cmd
 
 import (
+	"slices"
+
 	"github.com/kjnsn/tim/lib"
 	"github.com/kjnsn/tim/lib/message"
 	"github.com/spf13/cobra"
 )
 
 var loadCmd = &cobra.Command{
-	Use:   "load",
-	Short: "Loads all plugins into tmux",
-	Long:  `Loads all plugins, running their scripts.`,
-	Args:  cobra.NoArgs,
+	Use:   "load [plugin...]",
+	Short: "Loads plugins into tmux",
+	Long: `Loads plugins, running their scripts.
+
+If no arguments are given, all plugins are loaded.
+
+Otherwise the plugins specified are loaded.`,
+	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		loadCommand()
+		loadCommand(args)
 	},
 }
 
@@ -35,7 +41,7 @@ func init() {
 	rootCmd.AddCommand(loadCmd)
 }
 
-func loadCommand() {
+func loadCommand(pluginNames []string) {
 	lockFile, err := lib.GetLockfile(cfgFile)
 	if err != nil {
 		message.Error(err.Error())
@@ -43,6 +49,10 @@ func loadCommand() {
 	defer lockFile.Close()
 
 	for _, plugin := range lockFile.Plugins() {
+		if len(pluginNames) > 0 && !slices.Contains(pluginNames, plugin.Name) {
+			continue
+		}
+
 		if err := plugin.Load(); err != nil {
 			message.Error(err.Error())
 		}
