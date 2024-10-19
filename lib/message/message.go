@@ -35,18 +35,33 @@ func Info(format string, a ...any) {
 // Prints a debug level message to the output.
 func Debug(format string, a ...any) {
 	if DebugEnabled {
-		color.Cyan(format, a...)
+		fmt.Printf(color.BlueString("DEBUG ")+format+"\n", a...)
 	}
 }
 
 // Prints a warning level message to the output.
 func Warning(format string, a ...any) {
-	color.Yellow(format, a...)
+	fmt.Printf(color.YellowString("WARNING ")+format+"\n", a...)
 }
 
 // Prints an error level message to the output,
 // quitting with an exit status of 1.
 func Error(format string, a ...any) {
-	color.Red(format, a...)
+	fmt.Printf(color.RedString("ERROR ")+format+"\n", a...)
 	os.Exit(1)
+}
+
+var osc8Escape = string([]byte{'\x1b', ']', '8', ';', ';'})
+
+const bel = string('\x07')
+
+// Adds the given url to the text using OSC8 escape
+// codes. If the terminal is not a tty,
+// just prints the text.
+func Hyperlink(url, text string) string {
+	if color.NoColor {
+		return text
+	}
+
+	return osc8Escape + url + bel + text + osc8Escape + bel
 }

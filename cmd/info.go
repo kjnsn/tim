@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -28,7 +29,7 @@ import (
 // infoCmd represents the info command
 var infoCmd = &cobra.Command{
 	Use:   "info [plugin]",
-	Short: "Displays information about installed plugins",
+	Short: "Displays information about installed plugins and tim itself",
 	Long: `Displays information about the given installed plugin,
 or without an argument shows information about all plugins.`,
 	Args: cobra.MaximumNArgs(1),
@@ -57,7 +58,7 @@ func infoCommand(pluginName string) {
 			return plugin.Name == pluginName
 		})
 		if i == -1 {
-			message.Warning("Plugin %s not installed\n", pluginName)
+			message.Warning("Plugin %s not installed", pluginName)
 		} else {
 			printPluginInfo(lockFile.Plugins()[i])
 		}
@@ -65,22 +66,46 @@ func infoCommand(pluginName string) {
 		return
 	}
 
+	// Print some generic information about tim.
+	message.Info("Tim Version: %s", TimVersion)
+	message.Info("Lockfile: %s", lockFile.Path())
+
 	for _, plugin := range lockFile.Plugins() {
 		printPluginInfo(plugin)
 	}
 }
 
 func printPluginInfo(plugin lib.Plugin) {
-	if err := plugin.CheckInstalled(); err != nil {
+	pluginDir, err := plugin.Dir()
+	if err != nil {
 		message.Error(err.Error())
 	}
 
 	str := ""
 
-	str += fmt.Sprintf("Name: %s\n", plugin.Name)
+	name := message.Hyperlink("https://github.com/"+plugin.Name, plugin.Name)
+	str += fmt.Sprintf("\nName: %s\n", name)
 	if plugin.Version != nil {
-		str += fmt.Sprintf("Version: %s\n", plugin.Version)
+		switch version := plugin.Version.(type) {
+		case *lib.SemanticVersion:
+			ver := message.Hyperlink("https://github.com/"+plugin.Name+"/releases/tag/"+version.GitRef(), version.String())
+			str += fmt.Sprintf("Version: %s\n", ver)
+		case *lib.GitVersion:
+			ver := message.Hyperlink("https://github.com/"+plugin.Name+"/tree/"+version.GitRef(), version.String())
+			str += fmt.Sprintf("Version: %s\n", ver)
+		}
 	}
-
 	fmt.Println(str)
+
+	err = plugin.CheckInstalled()
+	if err != nil {
+		if errors.Is(err, lib.ErrPluginNotInstalled) {
+			message.Warning("Plugin %s is present in the config file but not installed.\n"+
+				"  Run \"tim add\" to install it.", plugin.Name)
+		} else {
+			message.Error(err.Error())
+		}
+	} else {
+		str += fmt.Sprintf("Installed to: %s", pluginDir)
+	}
 }

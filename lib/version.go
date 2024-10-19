@@ -201,7 +201,10 @@ func (sv *GitVersion) Upgrade(pluginDir string) error {
 }
 
 func (gv *GitVersion) String() string {
-	return fmt.Sprintf("%s@%10s", gv.branch, gv.currentHash)
+	if gv.currentHash != "" {
+		return fmt.Sprintf("%s@%10s", gv.branch, gv.currentHash)
+	}
+	return gv.branch
 }
 
 func (gv *GitVersion) GitRef() string {

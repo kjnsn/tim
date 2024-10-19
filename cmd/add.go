@@ -73,7 +73,7 @@ func syncPlugins() {
 		if err := plugin.Install(spec); err != nil {
 			message.Error(err.Error())
 		}
-		message.Info("Plugin %s successfully installed at version %s\n", pluginName, plugin.Version)
+		message.Info("Plugin %s successfully installed at version %s", pluginName, plugin.Version)
 	}
 }
 
@@ -104,5 +104,5 @@ func addPlugin(pluginName string) {
 		message.Error(err.Error())
 	}
 
-	message.Info("Plugin %s successfully installed at version %s\n", pluginName, plugin.Version)
+	message.Info("Plugin %s successfully installed at version %s", pluginName, plugin.Version)
 }

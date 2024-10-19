@@ -28,6 +28,10 @@ type Lockfile struct {
 	PluginSpecs map[string]string `json:"plugins"`
 }
 
+func (lf *Lockfile) Path() string {
+	return lf.file.Name()
+}
+
 func (lf *Lockfile) Plugins() []Plugin {
 	plugins := make([]Plugin, 0)
 	for name, versionSpec := range lf.PluginSpecs {

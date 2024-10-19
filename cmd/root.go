@@ -37,10 +37,12 @@ configuration is setup with opinionated defaults.`,
 
 var cfgFile string
 var enableVerbose bool
+var TimVersion string
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(ver string) {
+	TimVersion = ver
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
