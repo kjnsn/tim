@@ -24,7 +24,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-var ErrNoVersions = errors.New("No versions available")
+var ErrNoVersions = errors.New("no versions available")
 
 // Version represents a version of a plugin, which
 // can either be a git based branch & commit, or a semver
